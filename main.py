@@ -4,17 +4,24 @@ import rich
 import getpass
 import subprocess
 import socket
+import ipaddress
 from mac_vendor_lookup import MacLookup
 from scapy.all import IP, ARP, Ether, srp
 from scapy.all import conf
 from rich.console import Console
 
-MacLookup().update_vendors()
 conf.verb = 0
 console = Console()
 mac = MacLookup()
 wuser = getpass.getuser()
 os.system('cls')
+
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.connect(("192.168.1.1", 80)) 
+local_ip = s.getsockname()[0]
+s.close()
+
+subnet = str(ipaddress.IPv4Network(f"{local_ip}/255.255.255.0", strict=False))
 
 console.print("""
 [#2021b9]            _   _ _            [/]
@@ -34,29 +41,45 @@ scan - scans all the devices it can find on ur ip
 """)
 
     elif command in ('scan', 'scanita'):
-            packet = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst="192.168.1.0/24")
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
 
-            answered, unanswered = srp(packet, timeout=2, verbose=False)
+        subnet = local_ip.rsplit('.', 1)[0] + '.0/24'
 
+        # Auto-detect and bind Scapy to the exact physical adapter holding local_ip
+        try:
+            target_iface = [iface for iface in conf.ifaces.values() if iface.ip == local_ip][0]
+            conf.iface = target_iface
+        except IndexError:
+            target_iface = conf.iface
+
+        packet = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=subnet)
+        
+        # Explicitly pass iface to srp
+        answered, unanswered = srp(packet, timeout=3, verbose=False, iface=conf.iface)
+
+        if not answered:
+            console.print("[red]No devices responded[/]")
+        else:
             for _, received in answered:
                 ip = received.psrc
                 mac_addr = received.hwsrc
 
-                # Try hostname
                 try:
                     name = socket.gethostbyaddr(ip)[0]
-                except socket.herror:
+                except (socket.herror, socket.gaierror):
                     name = None
 
-                # If no hostname, try vendor
                 if not name:
                     try:
                         vendor = mac.lookup(mac_addr)
                         name = f"{vendor} device"
                     except Exception:
-                        name = "Unknown device"
+                        name = "unknown device"
 
-                print(f"{ip}: {name}")
+                print(f"{ip}: {name} ({mac_addr})")
 
     elif command in ('exit', 'exita', 'quit', 'quitita'):
          break
