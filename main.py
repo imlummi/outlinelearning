@@ -14,7 +14,7 @@ try:
 except Exception:
     pass
 
-wuser = getpass.getuser()
+wuser = getpass.getuser() 
 os.system('cls' if os.name == 'nt' else 'clear')
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
