@@ -1,7 +1,8 @@
 import os
 import socket
 import getpass
-import rich
+from rich import spinner
+from concurrent.futures import ThreadPoolExecutor
 from mac_vendor_lookup import MacLookup
 from scapy.all import ARP, Ether, srp, conf
 from rich.console import Console
@@ -9,10 +10,6 @@ from rich.console import Console
 console = Console()
 
 mac = MacLookup()
-try:
-    mac.update_vendors()
-except Exception:
-    pass
 
 wuser = getpass.getuser() 
 os.system('cls' if os.name == 'nt' else 'clear')
@@ -36,33 +33,64 @@ while True:
     command = console.input(f'[[#79b2fc]{wuser}[/]|user] - ')
 
     if command in ('help', 'helpita'):
-        print("scan - scans all the devices it can find on ur ip\nexit/quit - close outline")
+        print("scan - scans all the devices it can find on ur ip\nports <ip> - scans all ports from the provided ip\nupdatevendors - updates mac vendors \nexit/quit - close outline")
 
     elif command in ('scan', 'scanita'):
-        
-        packet = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=base)
-        answered, _ = srp(packet, timeout=3, verbose=False, iface=conf.iface)
+        with console.status('scanning network', spinner='line', spinner_style='#79b2fc'):
+            packet = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=base)
+            answered, _ = srp(packet, timeout=3, verbose=False, iface=conf.iface)
 
-        if not answered:
-            console.print("[red]no devices found[/red]")
-        else:
-            for _, received in answered:
-                ip = received.psrc
-                mac_addr = received.hwsrc
+            if not answered:
+                console.print("[red]no devices found[/red]")
+            else:
+                for _, received in answered:
+                    ip = received.psrc
+                    mac_addr = received.hwsrc
 
-                try:
-                    name = socket.gethostbyaddr(ip)[0]
-                except socket.herror:
-                    name = None
-
-                if not name:
                     try:
-                        vendor = mac.lookup(mac_addr)
-                        name = f"{vendor} device"
-                    except Exception:
-                        name = "unknown device"
+                        name = socket.gethostbyaddr(ip)[0]
+                    except socket.herror:
+                        name = None
 
-                console.print(f"[#79b2fc]{ip}[/#79b2fc]: {name} ({mac_addr})")
+                    if not name:
+                        try:
+                            vendor = mac.lookup(mac_addr)
+                            name = f"{vendor} device"
+                        except Exception:
+                            name = "unknown device"
+
+                    console.print(f"[#79b2fc]{ip}[/#79b2fc]: {name} ({mac_addr})")
+
+    elif command.startswith('ports'):
+        with console.status('scanning ports', spinner='line', spinner_style='#79b2fc'):
+            parts = command.split()
+            if len(parts) < 2:
+                console.print('[yellow]usage: ports <ip>[/]')
+            else:
+                ports_target_ip = parts[1]
+                def check_port(ports_target_ip, port):
+                    try:
+                        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        s.settimeout(0.5)
+                        banner = ''
+                        if s.connect_ex((ports_target_ip, port)) == 0:
+                            s.send(b'HEAD / HTTP/1.0\r\n\r\n')
+                            banner = s.recv(1024).decode('utf-8', errors='ignore').strip().split('\n')[0]
+                            console.print(f'[#79b2fc]{port}[/] [green]OPEN[/] {banner}')
+                        s.close()
+                    except Exception:
+                        pass
+                with ThreadPoolExecutor(max_workers=500) as executor:
+                    executor.map(lambda p: check_port(ports_target_ip, p), range(1, 65536))
+                console.print('ports scan has been completed')
+
+    elif command in ('updatevendors', 'updatevendorita'):
+        with console.status('scanning ports', spinner='line', spinner_style='#79b2fc'):
+            try:
+                mac.update_vendors()
+                console.status("updated vendors")
+            except Exception:
+                pass
 
     elif command in ('exit', 'exita', 'quit', 'quitita'):
         break
