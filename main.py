@@ -36,16 +36,15 @@ while True:
     command = console.input(f'[[#79b2fc]{wuser}[/]|user] - ')
 
     if command in ('help', 'helpita'):
-        print("\nscan - scans all the devices it can find on ur ip\n")
+        print("scan - scans all the devices it can find on ur ip\nexit/quit - close outline")
 
     elif command in ('scan', 'scanita'):
-        console.print(f"[dim]Scanning target: {base} on interface: {conf.iface.name}[/dim]")
         
         packet = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=base)
         answered, _ = srp(packet, timeout=3, verbose=False, iface=conf.iface)
 
         if not answered:
-            console.print("[bold red]No devices found.[/bold red]")
+            console.print("[red]no devices found[/red]")
         else:
             for _, received in answered:
                 ip = received.psrc
@@ -61,9 +60,9 @@ while True:
                         vendor = mac.lookup(mac_addr)
                         name = f"{vendor} device"
                     except Exception:
-                        name = "Unknown device"
+                        name = "unknown device"
 
-                console.print(f"[bold green]{ip}[/bold green]: {name} [dim]({mac_addr})[/dim]")
+                console.print(f"[#79b2fc]{ip}[/#79b2fc]: {name} ({mac_addr})")
 
     elif command in ('exit', 'exita', 'quit', 'quitita'):
         break
