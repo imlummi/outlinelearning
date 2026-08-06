@@ -4,7 +4,7 @@ import getpass
 from rich import spinner
 from concurrent.futures import ThreadPoolExecutor
 from mac_vendor_lookup import MacLookup
-from scapy.all import ARP, Ether, srp, conf
+from scapy.all import ARP, Ether, srp, conf, IP, ICMP, send
 from rich.console import Console
 
 console = Console()
@@ -33,7 +33,15 @@ while True:
     command = console.input(f'[[#79b2fc]{wuser}[/]|user] - ')
 
     if command in ('help', 'helpita'):
-        print("scan - scans all the devices it can find on ur ip\nports <ip> - scans all ports from the provided ip\nupdatevendors - updates mac vendors \nexit/quit - close outline")
+        print("""
+        help - shows all commands
+        scan - scans all the devices it can find on ur ip
+        ports <ip> - scans all ports from the provided ip
+        pong <ip> [-c count] - sends a packet (WITHOUT WAITING FOR A REPLY)
+        updatevendors - updates mac vendors
+        clear/cls - clear the terminal
+        exit/quit - close outline
+        """)
 
     elif command in ('scan', 'scanita'):
         with console.status('scanning network', spinner='line', spinner_style='#79b2fc'):
@@ -91,6 +99,29 @@ while True:
                 console.status("updated vendors")
             except Exception:
                 pass
+    elif command in ('cls', 'clsita', 'clear', 'clearita'):
+        os.system('cls')
+
+    elif command.startswith('pong'):
+        parts = command.split()
+        if len(parts) < 2:
+            console.print('[yellow]usage: pong <ip> [-c count][/]')
+            continue
+
+        host = parts[1]
+        count = 1
+
+        if len(parts) == 2:
+            send(IP(dst=host)/ICMP(), verbose=False)
+            console.print(f'sent 1 packet to {host}')
+
+        if len(parts) == 4:
+            if parts[2] =='-c':
+                with console.status('sending packets', spinner='line', spinner_style='white'):
+                    count = int(parts[3])
+                    for _ in range(count):
+                        send(IP(dst=host)/ICMP(), verbose=False)
+                console.print(f'sent {count} packet to {host}')
 
     elif command in ('exit', 'exita', 'quit', 'quitita'):
         break
